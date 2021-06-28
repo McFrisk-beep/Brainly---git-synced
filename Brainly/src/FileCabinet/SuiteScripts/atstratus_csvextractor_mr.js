@@ -108,6 +108,9 @@ function(record, search, runtime, file, xml, currency, format) {
                 //Get the Vendor
                 vendorSupplier = checkNull(bankNode[x].getElementsByTagName({ tagName: 'Nm'}), 0);
                 var vendorNameSplit = vendorSupplier.split(' ');    //Split the blank
+                var vendorNameCombined = '';
+                var searchResultCount = 0;
+                var previousResultCount = 0;
                 /*
                 Try and match the vendor name with something in NetSuite
                 We'll try and increment by words until only one result shows up.
@@ -118,33 +121,56 @@ function(record, search, runtime, file, xml, currency, format) {
                 - To Currency (which is the primary currency)
                 */
                 for(var y = 0; y < vendorNameSplit.length; y++){
-                    //vendorNameSplit[y];
-                }
+                    vendorNameCombined += vendorNameSplit[y];   //Add strings individually
 
-                var vendorSearchObj = search.create({
-                    type: "vendor",
-                    filters:
-                    [
-                       ["entityid","contains","slack"]
-                    ],
-                    columns:
-                    [
-                       search.createColumn({
-                          name: "entityid",
-                          sort: search.Sort.ASC,
-                          label: "Name"
-                       }),
-                       search.createColumn({name: "email", label: "Email"}),
-                       search.createColumn({name: "subsidiary", label: "Primary Subsidiary"}),
-                       search.createColumn({name: "currency", label: "Currency"})
-                    ]
-                 });
-                 var searchResultCount = vendorSearchObj.runPaged().count;
-                 log.debug("vendorSearchObj result count",searchResultCount);
-                 vendorSearchObj.run().each(function(result){
-                    // .run().each has a limit of 4,000 results
-                    return true;
-                 });
+                    var vendorSearchObj = search.create({
+                        type: "vendor",
+                        filters:
+                        [
+                           ["entityid","contains",vendorNameCombined]
+                        ],
+                        columns:
+                        [
+                           search.createColumn({
+                              name: "entityid",
+                              sort: search.Sort.ASC,
+                              label: "Name"
+                           }),
+                           search.createColumn({name: "email", label: "Email"}),
+                           search.createColumn({name: "subsidiary", label: "Primary Subsidiary"}),
+                           search.createColumn({name: "currency", label: "Currency"}),
+                           search.createColumn({name: "internalid", label: "Internal ID"})
+                        ]
+                     });
+                    searchResultCount = vendorSearchObj.runPaged().count;
+
+                    //If the search result has 2 or more results, add another string
+                    //However, if there's 2 results, and it's the end of the string, just get the 1st result
+                    if(searchResultCount > 1 && (y + 1) <= vendorNameSplit.length){
+                        vendorNameCombined += ' ';  //Add a space to separate the words
+                    }
+                    else if(searchResultCount > 1 && (y + 1) >= vendorNameSplit.length){
+                        vendorSearchObj.run().each(function(result){
+                            vendorSupplier = result.getValue({ name: 'internalid'});
+                            return false;
+                        });
+                    }
+                    else if(searchResultCount == 0 && previousResultCount > 0){
+                        vendorSearchObj.run().each(function(result){
+                            vendorSupplier = result.getValue({ name: 'internalid'});
+                            return false;
+                        });
+                    }
+                    else{
+                        vendorSearchObj.run().each(function(result){
+                            vendorSupplier = result.getValue({ name: 'internalid'});
+                            return false;
+                        });
+                    }
+
+                    //Save the previous result count, in case the next word would give 0 result
+                    previousResultCount = searchResultCount;
+                }
 
                 bankNumber = checkNull(bankNode[x].getElementsByTagName({ tagName: 'CdtrAcct'}), 0);
                 //Bank Name, to be added along with bank number
@@ -368,7 +394,8 @@ function(record, search, runtime, file, xml, currency, format) {
             // log.debug('transferCurrency', transferCurrency);
 
             //Currently testing
-            bankRecord.setValue({ fieldId: 'custrecord_vendor', value: '2794'});  //This is inconsistent
+            //bankRecord.setValue({ fieldId: 'custrecord_vendor', value: '2794'});  //This is inconsistent
+            bankRecord.setValue({ fieldId: 'custrecord_vendor', value: vendorSupplier});  //This is inconsistent
             bankRecord.setValue({ fieldId: 'custrecord_banknumber', value: bankNumber});
             bankRecord.setValue({ fieldId: 'custrecord_vendorbankaccount', value: vendorBankAccount});
             bankRecord.setValue({ fieldId: 'custrecord_address', value: address});
