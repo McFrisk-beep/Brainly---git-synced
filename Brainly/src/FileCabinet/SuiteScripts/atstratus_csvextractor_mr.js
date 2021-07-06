@@ -84,6 +84,41 @@ function(record, search, runtime, file, xml, currency, format) {
             log.debug('xmlDocument', xmlDocument);
             log.debug('bankNode', bankNode);
 
+            //The Brainly Bank Account can be found outside, prior to the individual records. But, we still need it inside the loop, for the record creation
+            var brainlyBankNode = xml.XPath.select({
+                node: xmlDocument,
+                xpath: '//Stmt/Acct'
+            });
+            log.debug('brainlyBankNode', brainlyBankNode);
+            //The .replace removes the alphabets that might appear from the bank account number.
+            var brainlyBankAccount = checkNull(brainlyBankNode[0].getElementsByTagName({ tagName: 'Id'}), 0).replace(/[^\d.-]/g, '');
+            log.debug('Brainly Bank Account', brainlyBankAccount);
+
+            //Saved Search to link which Bank Account was fetched from the XML Data
+            // var accountSearchObj = search.create({
+            //     type: "account",
+            //     filters:
+            //     [
+            //        ["ibanacctnum","contains","93477002"]
+            //     ],
+            //     columns:
+            //     [
+            //        search.createColumn({
+            //           name: "name",
+            //           sort: search.Sort.ASC,
+            //           label: "Name"
+            //        }),
+            //        search.createColumn({name: "displayname", label: "Display Name"}),
+            //        search.createColumn({name: "custrecord_ats_bankaccount_statement", label: "Bank Account [as per Statement]"}),
+            //        search.createColumn({name: "internalid", label: "Internal ID"})
+            //     ]
+            //  });
+            // var searchResultCount = accountSearchObj.runPaged().count;
+            // log.debug("accountSearchObj result count",searchResultCount);
+            // accountSearchObj.run().each(function(result){
+            //     return true;
+            // });
+
             //for(var x = 0; x < 1; x++) {
             for (var x = 0; x < bankNode.length; x++) {
                 log.debug('XML Content', bankNode[x].textContent);
@@ -98,12 +133,13 @@ function(record, search, runtime, file, xml, currency, format) {
                 var referenceNumber;
                 var transferAmt;
                 var transferCurrency;
-                var transferExchangeRate;   //Sourced form Transaction Date
+                var transferExchangeRate;
                 var fromCurrency;    //Assumed from "transferCurrency"
-                var toCurrency;  //Currently assumed value (EUR)
+                var toCurrency;  //Per request, assumed from "transferCurrency"
                 var loadReference;   //UNKNOWN
-                var brainlyBankAccount;  //Customer Input needed
+                var statementBankAcct;
                 var subsidiary;
+
 
                 //Get the Vendor
                 vendorSupplier = checkNull(bankNode[x].getElementsByTagName({ tagName: 'Nm'}), 0);
@@ -198,13 +234,14 @@ function(record, search, runtime, file, xml, currency, format) {
 
                 var AmtNode = xml.XPath.select({
                     node: xmlDocument,
-                    xpath: '//Stmt/Ntry/NtryDtls/TxDtls/AmtDtls/TxAmt/Amt'
+                    //xpath: '//Stmt/Ntry/NtryDtls/TxDtls/AmtDtls/TxAmt/Amt'    - old one.
+                    xpath: '//Stmt/Acct'
                 });
-                transferCurrency = AmtNode[0].getAttribute({ name: 'Ccy'});
+                //transferCurrency = AmtNode[0].getAttribute({ name: 'Ccy'});   - old one
+                transferCurrency = checkNull(AmtNode[0].getElementsByTagName({ tagName: 'Ccy'}), 0);
 
                 /*******DATE CONVERSION************/
                 var storeDate = paymentDate;
-                var marker = false;
                 var outsideCtr = 0;
                 var year = '';
                 var month = '';
@@ -239,8 +276,11 @@ function(record, search, runtime, file, xml, currency, format) {
                     date: exchangeDate
                 });
 
+                //Per request on implementation, this is currently assumed from the transferCurrency field.
                 fromCurrency = transferCurrency;
-                toCurrency = 'EUR';
+                toCurrency = transferCurrency;
+
+
 
 
                 /****************SANITY TESTING***************/
@@ -275,6 +315,7 @@ function(record, search, runtime, file, xml, currency, format) {
                     fromCurrency,
                     toCurrency,
                     loadReference,
+                    statementBankAcct,
                     brainlyBankAccount,
                     subsidiary
                     );
@@ -376,6 +417,7 @@ function(record, search, runtime, file, xml, currency, format) {
         fromCurrency,
         toCurrency,
         loadReference,
+        statementBankAcct,
         brainlyBankAccount,
         subsidiary
         ){
@@ -409,13 +451,14 @@ function(record, search, runtime, file, xml, currency, format) {
             bankRecord.setValue({ fieldId: 'custrecord_fromcurrency', value: fromCurrency});
             bankRecord.setValue({ fieldId: 'custrecord_tocurrency', value: toCurrency});
             bankRecord.setValue({ fieldId: 'custrecord_loadreference', value: loadReference});
+            bankRecord.setValue({ fieldId: 'custrecord_ats_bankaccount_st', value: statementBankAcct});
             bankRecord.setValue({ fieldId: 'custrecord_brainlybankaccount', value: brainlyBankAccount});
             bankRecord.setValue({ fieldId: 'custrecord_subsidiary', value: subsidiary});
 
-            bankRecord.save({
-                enableSourcing: true,
-                ignoreMandatoryFields: true
-            });
+            // bankRecord.save({
+            //     enableSourcing: true,
+            //     ignoreMandatoryFields: true
+            // });
 
             return true;
         }
