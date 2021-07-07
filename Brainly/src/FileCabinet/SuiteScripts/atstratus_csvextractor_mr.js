@@ -92,32 +92,37 @@ function(record, search, runtime, file, xml, currency, format) {
             log.debug('brainlyBankNode', brainlyBankNode);
             //The .replace removes the alphabets that might appear from the bank account number.
             var brainlyBankAccount = checkNull(brainlyBankNode[0].getElementsByTagName({ tagName: 'Id'}), 0).replace(/[^\d.-]/g, '');
+            var statementBankAcct = brainlyBankAccount;
+            var subsidiary;
             log.debug('Brainly Bank Account', brainlyBankAccount);
 
             //Saved Search to link which Bank Account was fetched from the XML Data
-            // var accountSearchObj = search.create({
-            //     type: "account",
-            //     filters:
-            //     [
-            //        ["ibanacctnum","contains","93477002"]
-            //     ],
-            //     columns:
-            //     [
-            //        search.createColumn({
-            //           name: "name",
-            //           sort: search.Sort.ASC,
-            //           label: "Name"
-            //        }),
-            //        search.createColumn({name: "displayname", label: "Display Name"}),
-            //        search.createColumn({name: "custrecord_ats_bankaccount_statement", label: "Bank Account [as per Statement]"}),
-            //        search.createColumn({name: "internalid", label: "Internal ID"})
-            //     ]
-            //  });
-            // var searchResultCount = accountSearchObj.runPaged().count;
-            // log.debug("accountSearchObj result count",searchResultCount);
-            // accountSearchObj.run().each(function(result){
-            //     return true;
-            // });
+            var accountSearchObj = search.create({
+                type: "account",
+                filters:
+                [
+                   ["ibanacctnum","contains",brainlyBankAccount]
+                ],
+                columns:
+                [
+                   search.createColumn({
+                      name: "name",
+                      sort: search.Sort.ASC,
+                      label: "Name"
+                   }),
+                   search.createColumn({name: "displayname", label: "Display Name"}),
+                   search.createColumn({name: "custrecord_ats_bankaccount_statement", label: "Bank Account [as per Statement]"}),
+                   search.createColumn({name: "internalid", label: "Internal ID"}),
+                   search.createColumn({name: "subsidiary", label: "Subsidiary"})
+                ]
+             });
+            var searchResultCount = accountSearchObj.runPaged().count;
+            log.debug("accountSearchObj result count",searchResultCount);
+            accountSearchObj.run().each(function(result){
+                brainlyBankAccount = result.getValue({ name: 'internalid'});
+                subsidiary = result.getValue({ name: 'subsidiary'});
+                return false;
+            });
 
             //for(var x = 0; x < 1; x++) {
             for (var x = 0; x < bankNode.length; x++) {
@@ -137,8 +142,6 @@ function(record, search, runtime, file, xml, currency, format) {
                 var fromCurrency;    //Assumed from "transferCurrency"
                 var toCurrency;  //Per request, assumed from "transferCurrency"
                 var loadReference;   //UNKNOWN
-                var statementBankAcct;
-                var subsidiary;
 
 
                 //Get the Vendor
@@ -455,10 +458,10 @@ function(record, search, runtime, file, xml, currency, format) {
             bankRecord.setValue({ fieldId: 'custrecord_brainlybankaccount', value: brainlyBankAccount});
             bankRecord.setValue({ fieldId: 'custrecord_subsidiary', value: subsidiary});
 
-            // bankRecord.save({
-            //     enableSourcing: true,
-            //     ignoreMandatoryFields: true
-            // });
+            bankRecord.save({
+                enableSourcing: true,
+                ignoreMandatoryFields: true
+            });
 
             return true;
         }
